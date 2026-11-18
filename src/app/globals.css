@@ -1,0 +1,178 @@
+@import "tailwindcss";
+
+/* Warm paper + terracotta palette. Every colour lives here. */
+@theme inline {
+  --color-paper: #f6f1e9;
+  --color-card: #fffcf7;
+  --color-ink: #2b2420;
+  --color-muted: #7a6e64;
+  --color-line: #e8dfd2;
+  --color-clay: #c2553b;
+  --color-clay-dark: #9f432c;
+  --color-clay-soft: #f6e3da;
+  --color-sage: #55845c;
+  --color-sage-soft: #e1ece0;
+  --color-honey: #b9821c;
+  --color-honey-soft: #f7ead0;
+  --color-berry: #b0393a;
+  --color-berry-soft: #f6dcda;
+  --font-sans: var(--font-body), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-heading), Georgia, serif;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+.card {
+  background: var(--color-card);
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  padding: 16px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 18px;
+  border-radius: 14px;
+  font-weight: 600;
+  font-size: 16px;
+  user-select: none;
+  transition: background-color 150ms, color 150ms, transform 100ms;
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn:disabled {
+  opacity: 0.5;
+}
+.btn-primary {
+  background: var(--color-clay);
+  color: #fff;
+}
+.btn-primary:active {
+  background: var(--color-clay-dark);
+}
+.btn-soft {
+  background: var(--color-clay-soft);
+  color: var(--color-clay-dark);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
+}
+.btn-danger {
+  background: transparent;
+  color: var(--color-berry);
+  border: 1px solid var(--color-berry-soft);
+}
+
+.input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--color-line);
+  background: #fff;
+  font-size: 16px; /* 16px stops iOS zooming into fields */
+  color: var(--color-ink);
+}
+textarea.input {
+  min-height: 88px;
+  resize: vertical;
+}
+.input:focus,
+.btn:focus-visible,
+a:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--color-clay);
+  outline-offset: 2px;
+}
+.label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* Bottom sheet on phones, centred dialog on wider screens */
+dialog.sheet {
+  margin: auto auto 0;
+  width: 100%;
+  max-width: 100%;
+  max-height: 92dvh;
+  border-radius: 22px 22px 0 0;
+  background: var(--color-card);
+  color: var(--color-ink);
+  padding: 0;
+  border: 0;
+}
+dialog.sheet::backdrop {
+  background: rgb(43 36 32 / 0.4);
+}
+@media (min-width: 640px) {
+  dialog.sheet {
+    margin: auto;
+    max-width: 440px;
+    border-radius: 22px;
+  }
+}
+
+.seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  background: var(--color-paper);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  padding: 4px;
+  gap: 4px;
+}
+.seg label {
+  position: relative;
+}
+.seg input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+}
+.seg span {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+.seg input:checked + span {
+  background: #fff;
+  color: var(--color-ink);
+  box-shadow: 0 1px 2px rgb(43 36 32 / 0.12);
+}
+.seg input:focus-visible + span {
+  outline: 2px solid var(--color-clay);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
