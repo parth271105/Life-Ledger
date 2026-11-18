@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { DM_Sans, Fraunces } from "next/font/google";
+import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui";
 import { SwRegister } from "@/components/sw-register";
 import "./globals.css";
 
-const body = DM_Sans({ subsets: ["latin"], variable: "--font-body" });
-const heading = Fraunces({ subsets: ["latin"], variable: "--font-heading", axes: ["SOFT", "opsz"] });
+// One clean font for everything; headings differ by weight and size only.
+const inter = Inter({ subsets: ["latin", "latin-ext"], variable: "--font-body" });
 
 export const metadata: Metadata = {
   title: "Life Ledger",
@@ -22,7 +22,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${body.variable} ${heading.variable}`}>
+    <html lang="en" className={inter.variable}>
       <body>
         {children}
         <Toaster />
