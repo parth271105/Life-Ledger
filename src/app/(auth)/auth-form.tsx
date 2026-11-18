@@ -7,6 +7,7 @@ import { login, signup } from "./actions";
 export function AuthForm({ mode }: { mode: "login" | "signup" }) {
   const [state, action, pending] = useActionState(mode === "login" ? login : signup, undefined);
   const [tz, setTz] = useState("UTC");
+  const [email, setEmail] = useState(""); // controlled so a failed attempt doesn't wipe it
   useEffect(() => setTz(Intl.DateTimeFormat().resolvedOptions().timeZone), []);
   const isLogin = mode === "login";
 
@@ -15,7 +16,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
       <input type="hidden" name="tz" value={tz} />
       <label className="block">
         <span className="label">Email</span>
-        <input className="input" name="email" type="email" autoComplete="email" inputMode="email" required />
+        <input className="input" name="email" type="email" autoComplete="email" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
       </label>
       <label className="block">
         <span className="label">Password</span>

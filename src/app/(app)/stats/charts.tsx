@@ -56,7 +56,7 @@ const Empty = ({ text }: { text: string }) => <p className="py-6 text-center tex
 const axes = (unit = "", domain?: [number, number]) => [
   <CartesianGrid key="g" vertical={false} stroke={GRID} />,
   <XAxis key="x" dataKey="label" tick={TICK} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={12} />,
-  <YAxis key="y" tick={TICK} tickLine={false} axisLine={false} width={44} allowDecimals={false} unit={unit} domain={domain} />,
+  <YAxis key="y" tick={TICK} tickLine={false} axisLine={false} width={48} allowDecimals={false} unit={unit} domain={domain} />,
 ];
 
 export function Charts(p: Props) {
@@ -77,7 +77,7 @@ export function Charts(p: Props) {
             <LineChart data={p.completion} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
               {axes("%", [0, 100])}
               <Tooltip {...TIP} formatter={(v) => [`${v}%`, "Completed"]} />
-              <Line type="monotone" dataKey="pct" stroke={CLAY} strokeWidth={2} dot={{ r: 4, fill: CLAY, strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls />
+              <Line isAnimationActive={false} type="monotone" dataKey="pct" stroke={CLAY} strokeWidth={2} dot={{ r: 4, fill: CLAY, strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls />
             </LineChart>
           </ResponsiveContainer>
         ) : (
@@ -91,9 +91,9 @@ export function Charts(p: Props) {
             <thead>
               <tr className="text-left text-[13px] text-muted">
                 <th className="pb-2 font-semibold">Goal</th>
-                <th className="pb-2 text-right font-semibold">Now</th>
-                <th className="pb-2 text-right font-semibold">Best</th>
-                <th className="pb-2 text-right font-semibold">Hit</th>
+                <th className="w-14 pb-2 text-right font-semibold">Now</th>
+                <th className="w-14 pb-2 text-right font-semibold">Best</th>
+                <th className="w-14 pb-2 text-right font-semibold">Hit</th>
               </tr>
             </thead>
             <tbody className="tabular">
@@ -124,7 +124,7 @@ export function Charts(p: Props) {
               {axes()}
               <Tooltip {...TIP} formatter={(v) => [`${num(Number(v))} ${goal.unit}`, goal.name]} />
               <ReferenceLine y={goal.target} stroke="#2b2420" strokeDasharray="4 4" label={{ value: "target", position: "insideTopRight", fontSize: 12, fill: "#7a6e64" }} />
-              <RBar dataKey="value" fill={CLAY} radius={[4, 4, 0, 0]} maxBarSize={28} />
+              <RBar isAnimationActive={false} dataKey="value" fill={CLAY} radius={[4, 4, 0, 0]} maxBarSize={28} />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -138,7 +138,7 @@ export function Charts(p: Props) {
               <XAxis dataKey="label" tick={TICK} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={12} />
               <YAxis tick={TICK} tickLine={false} axisLine={false} width={44} domain={["dataMin - 1", "dataMax + 1"]} />
               <Tooltip {...TIP} formatter={(v) => [`${num(Number(v))} kg`, "Weight"]} />
-              <Line type="monotone" dataKey="kg" stroke={CLAY} strokeWidth={2} dot={{ r: 4, fill: CLAY, strokeWidth: 0 }} />
+              <Line isAnimationActive={false} type="monotone" dataKey="kg" stroke={CLAY} strokeWidth={2} dot={{ r: 4, fill: CLAY, strokeWidth: 0 }} />
             </LineChart>
           </ResponsiveContainer>
         </Card>
@@ -151,8 +151,8 @@ export function Charts(p: Props) {
               {axes()}
               <Tooltip {...TIP} />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 13 }} />
-              <RBar dataKey="done" name="Done" stackId="t" fill={BLUE} maxBarSize={28} stroke="#fffcf7" strokeWidth={1} />
-              <RBar dataKey="missed" name="Missed" stackId="t" fill={CLAY} radius={[4, 4, 0, 0]} maxBarSize={28} stroke="#fffcf7" strokeWidth={1} />
+              <RBar isAnimationActive={false} dataKey="done" name="Done" stackId="t" fill={BLUE} maxBarSize={28} stroke="#fffcf7" strokeWidth={1} />
+              <RBar isAnimationActive={false} dataKey="missed" name="Missed" stackId="t" fill={CLAY} radius={[4, 4, 0, 0]} maxBarSize={28} stroke="#fffcf7" strokeWidth={1} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
@@ -169,8 +169,8 @@ export function Charts(p: Props) {
               <YAxis tick={TICK} tickLine={false} axisLine={false} width={52} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : String(v))} />
               <Tooltip {...TIP} formatter={(v, n) => [money(Number(v)), n]} />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 13 }} />
-              <RBar dataKey="income" name="Income" fill={BLUE} radius={[4, 4, 0, 0]} maxBarSize={20} />
-              <RBar dataKey="expense" name="Expense" fill={CLAY} radius={[4, 4, 0, 0]} maxBarSize={20} />
+              <RBar isAnimationActive={false} dataKey="income" name="Income" fill={BLUE} radius={[4, 4, 0, 0]} maxBarSize={20} />
+              <RBar isAnimationActive={false} dataKey="expense" name="Expense" fill={CLAY} radius={[4, 4, 0, 0]} maxBarSize={20} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
@@ -185,7 +185,7 @@ export function Charts(p: Props) {
               <XAxis type="number" hide />
               <YAxis type="category" dataKey="category" tick={{ ...TICK, fill: "#2b2420" }} tickLine={false} axisLine={false} width={96} />
               <Tooltip {...TIP} formatter={(v) => [money(Number(v)), "Spent"]} />
-              <RBar dataKey="amount" fill={CLAY} radius={[0, 4, 4, 0]} maxBarSize={22} />
+              <RBar isAnimationActive={false} dataKey="amount" fill={CLAY} radius={[0, 4, 4, 0]} maxBarSize={22} />
             </BarChart>
           </ResponsiveContainer>
         ) : (

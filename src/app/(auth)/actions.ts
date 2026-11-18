@@ -9,9 +9,10 @@ import { attemptsSince, clientIp, signIn } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { safeTz } from "@/lib/dates";
 
-type State = { error?: string } | undefined;
+type State = { error?: string; email?: string } | undefined;
 
 export async function login(_: State, fd: FormData): Promise<State> {
+  const email = String(fd.get("email") ?? "").slice(0, 200);
   try {
     await signIn("credentials", {
       email: fd.get("email"),
@@ -23,11 +24,11 @@ export async function login(_: State, fd: FormData): Promise<State> {
     unstable_rethrow(e); // successful sign-in redirects by throwing
     if (e instanceof AuthError && e.type === "CredentialsSignin") {
       return (e as { code?: string }).code === "rate_limited"
-        ? { error: "Too many tries. Please wait 15 minutes and try again." }
-        : { error: "That email and password don't match." };
+        ? { error: "Too many tries. Please wait 15 minutes and try again.", email }
+        : { error: "That email and password don't match.", email };
     }
     console.error(e);
-    return { error: "We couldn't sign you in just now. Please try again in a moment." };
+    return { error: "We couldn't sign you in just now. Please try again in a moment.", email };
   }
 }
 
