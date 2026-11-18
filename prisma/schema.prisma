@@ -27,7 +27,7 @@ model Goal {
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name      String
-  target    Float
+  target    Float     @default(1) // goals are tick boxes: 1 = done
   unit      String    @default("")
   createdAt DateTime  @default(now())
   logs      GoalLog[]

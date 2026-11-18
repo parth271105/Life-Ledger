@@ -1,44 +1,86 @@
 "use client";
 
-import { useState } from "react";
+import { useOptimistic, useState } from "react";
 import { deleteBudget, deleteTx, saveBudget, saveTx } from "@/app/actions";
-import { ActionForm, Bar, Field, Sheet, SubmitRow, callAction } from "@/components/ui";
+import { ActionForm, Bar, Field, Sheet, SubmitRow, isTemp, listOp, runOptimistic, tempId } from "@/components/ui";
 import { fmtDay, money } from "@/lib/format";
 
 type Tx = { id: string; amount: number; type: "IN" | "OUT"; category: string; date: string; note: string };
-type Budget = { id: string; category: string; limit: number; spent: number };
+type Budget = { id: string; category: string; limit: number };
+
+// Same clean-up the server does, so the optimistic row matches what gets saved.
+const cleanCategory = (s: string) => s.trim().replace(/\s+/g, " ").replace(/^./, (c) => c.toUpperCase());
+const net = (list: Tx[]) => list.reduce((s, t) => s + (t.type === "IN" ? t.amount : -t.amount), 0);
+const sum = (list: Tx[], type: Tx["type"]) => list.filter((t) => t.type === type).reduce((s, t) => s + t.amount, 0);
 
 export function MoneyView({
   today,
-  monthIn,
-  monthOut,
+  month,
+  balance,
   txs,
   budgets,
   categories,
+  nav,
 }: {
   today: string;
-  monthIn: number;
-  monthOut: number;
+  month: string;
+  balance: number;
   txs: Tx[];
   budgets: Budget[];
   categories: string[];
+  nav: React.ReactNode;
 }) {
+  const [list, changeTx] = useOptimistic(txs, listOp<Tx>);
+  const [bList, changeBudget] = useOptimistic(budgets, listOp<Budget>);
   const [tx, setTx] = useState<Tx | "IN" | "OUT" | null>(null);
   const [budget, setBudget] = useState<Budget | "new" | null>(null);
 
-  const days = [...new Set(txs.map((t) => t.date))];
-  const alerts = budgets.filter((b) => b.spent >= 0.8 * b.limit);
+  const liveBalance = balance + net(list) - net(txs);
+  const spentBy = new Map<string, number>();
+  for (const t of list) if (t.type === "OUT") spentBy.set(t.category, (spentBy.get(t.category) ?? 0) + t.amount);
+  const rows = bList.map((b) => ({ ...b, spent: spentBy.get(b.category) ?? 0 }));
+  const alerts = rows.filter((b) => b.spent >= 0.8 * b.limit);
+
+  const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
+  const days = [...new Set(sorted.map((t) => t.date))];
+
+  const onSaveTx = (fd: FormData) => {
+    const id = String(fd.get("id") || tempId());
+    const item: Tx = {
+      id,
+      amount: Number(fd.get("amount")),
+      type: fd.get("type") === "IN" ? "IN" : "OUT",
+      category: cleanCategory(String(fd.get("category"))),
+      date: String(fd.get("date")),
+      note: String(fd.get("note") ?? "").trim(),
+    };
+    if (item.date.startsWith(month)) changeTx({ type: "upsert", item });
+    else changeTx({ type: "delete", id }); // moved to another month: leaves this list
+  };
+
+  const onSaveBudget = (fd: FormData) => {
+    const category = cleanCategory(String(fd.get("category")));
+    const id = String(fd.get("id") || bList.find((b) => b.category === category)?.id || tempId());
+    changeBudget({ type: "upsert", item: { id, category, limit: Number(fd.get("monthlyLimit")) } });
+  };
 
   return (
     <>
+      <section className="card">
+        <p className="text-[14px] font-medium text-muted">Balance</p>
+        <p className={`tabular text-[34px] leading-tight font-semibold ${liveBalance < 0 ? "text-berry" : ""}`}>{money(liveBalance)}</p>
+      </section>
+
+      {nav}
+
       <div className="mt-2 grid grid-cols-2 gap-3">
         <div className="card">
           <p className="text-[14px] font-medium text-muted">In</p>
-          <p className="tabular text-[20px] font-semibold text-sage">{money(monthIn)}</p>
+          <p className="tabular text-[20px] font-semibold text-sage">{money(sum(list, "IN"))}</p>
         </div>
         <div className="card">
           <p className="text-[14px] font-medium text-muted">Out</p>
-          <p className="tabular text-[20px] font-semibold text-clay-dark">{money(monthOut)}</p>
+          <p className="tabular text-[20px] font-semibold text-clay-dark">{money(sum(list, "OUT"))}</p>
         </div>
       </div>
 
@@ -72,15 +114,15 @@ export function MoneyView({
             + Set budget
           </button>
         </div>
-        {budgets.length === 0 ? (
+        {rows.length === 0 ? (
           <p className="card text-[15px] text-muted">Set a monthly limit for a category. You'll get a heads-up at 80% and an alert when you go over.</p>
         ) : (
           <ul className="card grid gap-4">
-            {budgets.map((b) => {
+            {rows.map((b) => {
               const pct = b.spent / b.limit;
               return (
                 <li key={b.id}>
-                  <button className="w-full text-left" onClick={() => setBudget(b)}>
+                  <button className="w-full text-left" onClick={() => !isTemp(b.id) && setBudget(b)}>
                     <span className="mb-1.5 flex items-baseline justify-between gap-2">
                       <span className="truncate font-semibold">{b.category}</span>
                       <span className="tabular shrink-0 text-[14px] text-muted">
@@ -101,16 +143,19 @@ export function MoneyView({
         {days.length === 0 && <p className="card text-[15px] text-muted">Nothing this month yet.</p>}
         {days.map((d) => (
           <div key={d} className="mb-4">
-            <h3 className="mb-1.5 font-sans text-[14px] font-semibold text-muted">{d === today ? "Today" : fmtDay(d)}</h3>
+            <h3 className="mb-1.5 text-[14px] font-semibold text-muted">{d === today ? "Today" : fmtDay(d)}</h3>
             <ul className="card divide-y divide-line p-0">
-              {txs
+              {sorted
                 .filter((t) => t.date === d)
                 .map((t) => (
                   <li key={t.id}>
-                    <button className="flex min-h-14 w-full items-center justify-between gap-3 px-4 py-2.5 text-left" onClick={() => setTx(t)}>
+                    <button
+                      className={`flex min-h-14 w-full items-center justify-between gap-3 px-4 py-2.5 text-left ${isTemp(t.id) ? "opacity-60" : ""}`}
+                      onClick={() => !isTemp(t.id) && setTx(t)}
+                    >
                       <span className="min-w-0">
                         <span className="block truncate font-medium">{t.category}</span>
-                        {t.note && <span className="block truncate text-[13px] text-muted">{t.note}</span>}
+                        {(t.note || isTemp(t.id)) && <span className="block truncate text-[13px] text-muted">{isTemp(t.id) ? "Saving…" : t.note}</span>}
                       </span>
                       <span className={`tabular shrink-0 font-semibold ${t.type === "IN" ? "text-sage" : ""}`}>
                         {t.type === "IN" ? "+" : "−"}
@@ -129,18 +174,31 @@ export function MoneyView({
           <option key={c} value={c} />
         ))}
       </datalist>
-      <TxSheet tx={tx} today={today} onClose={() => setTx(null)} />
-      <BudgetSheet budget={budget} onClose={() => setBudget(null)} />
+      <TxSheet
+        tx={tx}
+        today={today}
+        onClose={() => setTx(null)}
+        onSave={onSaveTx}
+        onDelete={(id) => runOptimistic(() => changeTx({ type: "delete", id }), () => deleteTx(id))}
+      />
+      <BudgetSheet
+        budget={budget}
+        onClose={() => setBudget(null)}
+        onSave={onSaveBudget}
+        onDelete={(id) => runOptimistic(() => changeBudget({ type: "delete", id }), () => deleteBudget(id))}
+      />
     </>
   );
 }
 
-function TxSheet({ tx, today, onClose }: { tx: Tx | "IN" | "OUT" | null; today: string; onClose: () => void }) {
+type SheetProps<T> = { onClose: () => void; onSave: (fd: FormData) => void; onDelete: (id: string) => void } & T;
+
+function TxSheet({ tx, today, onClose, onSave, onDelete }: SheetProps<{ tx: Tx | "IN" | "OUT" | null; today: string }>) {
   const t = typeof tx === "object" ? tx : null;
   const type = t?.type ?? (tx as "IN" | "OUT" | null) ?? "OUT";
   return (
     <Sheet open={!!tx} onClose={onClose} title={t ? "Edit entry" : type === "IN" ? "Money in" : "Money out"}>
-      <ActionForm action={saveTx} onDone={onClose}>
+      <ActionForm action={saveTx} onDone={onClose} optimistic={onSave}>
         {t && <input type="hidden" name="id" value={t.id} />}
         <div className="seg" role="radiogroup" aria-label="Type">
           <label>
@@ -153,7 +211,18 @@ function TxSheet({ tx, today, onClose }: { tx: Tx | "IN" | "OUT" | null; today: 
           </label>
         </div>
         <Field label="Amount">
-          <input className="input tabular text-[20px] font-semibold" name="amount" inputMode="decimal" defaultValue={t?.amount ?? ""} required autoFocus={!t} />
+          <input
+            className="input tabular text-[20px] font-semibold"
+            name="amount"
+            type="number"
+            inputMode="decimal"
+            step="0.01"
+            min="0.01"
+            max="999999999"
+            defaultValue={t?.amount ?? ""}
+            required
+            autoFocus={!t}
+          />
         </Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Category">
@@ -166,25 +235,49 @@ function TxSheet({ tx, today, onClose }: { tx: Tx | "IN" | "OUT" | null; today: 
         <Field label="Note">
           <input className="input" name="note" defaultValue={t?.note} maxLength={200} placeholder="Optional" />
         </Field>
-        <SubmitRow label={t ? "Save" : "Add"} onDelete={t ? async () => confirm("Delete this entry?") && (await callAction(() => deleteTx(t.id))) && onClose() : undefined} />
+        <SubmitRow
+          label={t ? "Save" : "Add"}
+          onDelete={
+            t
+              ? () => {
+                  if (confirm("Delete this entry?")) {
+                    onClose();
+                    onDelete(t.id);
+                  }
+                }
+              : undefined
+          }
+        />
       </ActionForm>
     </Sheet>
   );
 }
 
-function BudgetSheet({ budget, onClose }: { budget: Budget | "new" | null; onClose: () => void }) {
+function BudgetSheet({ budget, onClose, onSave, onDelete }: SheetProps<{ budget: Budget | "new" | null }>) {
   const b = budget && budget !== "new" ? budget : null;
   return (
     <Sheet open={!!budget} onClose={onClose} title={b ? "Edit budget" : "Monthly budget"}>
-      <ActionForm action={saveBudget} onDone={onClose}>
+      <ActionForm action={saveBudget} onDone={onClose} optimistic={onSave}>
         {b && <input type="hidden" name="id" value={b.id} />}
         <Field label="Category">
           <input className="input" name="category" list="cats" defaultValue={b?.category} maxLength={30} required autoComplete="off" />
         </Field>
         <Field label="Monthly limit">
-          <input className="input tabular" name="monthlyLimit" inputMode="decimal" defaultValue={b?.limit ?? ""} required />
+          <input className="input tabular" name="monthlyLimit" type="number" inputMode="decimal" step="0.01" min="0.01" max="999999999" defaultValue={b?.limit ?? ""} required />
         </Field>
-        <SubmitRow label="Save" onDelete={b ? async () => confirm("Remove this budget?") && (await callAction(() => deleteBudget(b.id))) && onClose() : undefined} />
+        <SubmitRow
+          label="Save"
+          onDelete={
+            b
+              ? () => {
+                  if (confirm("Remove this budget?")) {
+                    onClose();
+                    onDelete(b.id);
+                  }
+                }
+              : undefined
+          }
+        />
       </ActionForm>
     </Sheet>
   );

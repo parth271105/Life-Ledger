@@ -1,3 +1,4 @@
 {
+  "regions": ["iad1"],
   "crons": [{ "path": "/api/cron/reminders", "schedule": "30 3 * * *" }]
 }

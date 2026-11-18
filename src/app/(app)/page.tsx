@@ -31,14 +31,7 @@ export default async function Today({ searchParams }: { searchParams: Promise<{ 
 
   const goalRows = goals.map((g) => {
     const met = new Set(g.logs.filter((l) => l.value >= g.target).map((l) => toYmd(l.date)));
-    return {
-      id: g.id,
-      name: g.name,
-      target: g.target,
-      unit: g.unit,
-      value: g.logs.find((l) => toYmd(l.date) === day)?.value ?? 0,
-      streakBefore: streakEnding(met, addDays(day, -1)),
-    };
+    return { id: g.id, name: g.name, done: met.has(day), streakBefore: streakEnding(met, addDays(day, -1)) };
   });
 
   const dueLabel = (ymd: string) =>

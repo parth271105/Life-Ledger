@@ -13,10 +13,9 @@ const id = z.string().min(1).max(40);
 
 /* ---------- Goals ---------- */
 
+// Goals are simple daily tick boxes: a name, done or not done each day.
 const goalSchema = z.object({
   name: z.string().trim().min(1, "Give the goal a name").max(40, "Keep the name under 40 characters"),
-  target: z.coerce.number().positive("Target must be more than 0").max(100000, "That target is too big"),
-  unit: z.string().trim().max(15, "Keep the unit short").default(""),
 });
 
 export async function saveGoal(fd: FormData) {
@@ -36,21 +35,20 @@ export async function deleteGoal(goalId: string) {
   });
 }
 
-/** Sets the absolute value for a goal on a day (idempotent, safe to tap fast). */
-export async function logGoal(goalId: string, date: string, value: number) {
+/** Marks a goal done / not done for a day. Idempotent, so fast double taps are safe. */
+export async function logGoal(goalId: string, date: string, done: boolean) {
   const me = await requireUser();
   return run(async () => {
     const gid = id.parse(goalId);
     const day = toDate(ymd.parse(date));
-    const v = z.number().min(0).max(100000).parse(Math.round(value * 100) / 100);
-    if (!(await db.goal.count({ where: { id: gid, userId: me.id } }))) throw new z.ZodError([]);
-    if (v === 0) await db.goalLog.deleteMany({ where: { goalId: gid, date: day } });
-    else
-      await db.goalLog.upsert({
-        where: { goalId_date: { goalId: gid, date: day } },
-        create: { goalId: gid, date: day, value: v },
-        update: { value: v },
-      });
+    const owned = { goalId: gid, date: day, goal: { userId: me.id } };
+    if (!done) return void (await db.goalLog.deleteMany({ where: owned }));
+    // One round trip: insert only if the goal belongs to this user; ignore if already ticked.
+    await db.$executeRaw`
+      INSERT INTO "GoalLog" (id, "goalId", date, value)
+      SELECT ${"gl" + crypto.randomUUID().replace(/-/g, "")}, g.id, ${day}::date, 1 FROM "Goal" g
+      WHERE g.id = ${gid} AND g."userId" = ${me.id}
+      ON CONFLICT ("goalId", date) DO NOTHING`;
   }, false);
 }
 
@@ -142,13 +140,15 @@ const txSchema = z.object({
 });
 
 async function budgetNotice(userId: string, cat: string, date: string) {
-  const b = await db.budget.findUnique({ where: { userId_category: { userId, category: cat } } });
-  if (!b) return;
   const ym = date.slice(0, 7);
-  const s = await db.transaction.aggregate({
-    _sum: { amount: true },
-    where: { userId, category: cat, type: "OUT", date: { gte: toDate(ym + "-01"), lt: toDate(nextMonth(ym) + "-01") } },
-  });
+  const [b, s] = await Promise.all([
+    db.budget.findUnique({ where: { userId_category: { userId, category: cat } } }),
+    db.transaction.aggregate({
+      _sum: { amount: true },
+      where: { userId, category: cat, type: "OUT", date: { gte: toDate(ym + "-01"), lt: toDate(nextMonth(ym) + "-01") } },
+    }),
+  ]);
+  if (!b) return;
   const spent = Number(s._sum.amount ?? 0);
   const limit = Number(b.monthlyLimit);
   if (spent > limit) return `Over your ${cat} budget by ${money(spent - limit)} this month`;

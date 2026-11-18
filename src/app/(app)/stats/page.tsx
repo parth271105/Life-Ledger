@@ -54,10 +54,7 @@ export default async function Stats({ searchParams }: { searchParams: Promise<SP
     return {
       id: g.id,
       name: g.name,
-      unit: g.unit,
-      target: g.target,
       start,
-      byDay,
       met,
       current: currentStreak(met, today),
       best: bestStreak(met),
@@ -79,14 +76,13 @@ export default async function Stats({ searchParams }: { searchParams: Promise<SP
     return { label: label(b), pct: a === null ? null : Math.round(a) };
   });
 
+  // Per goal: share of days ticked in each bucket (a day is 0% or 100%; a week is the average).
   const goalSeries = goalData.map((g) => ({
     id: g.id,
     name: g.name,
-    unit: g.unit,
-    target: g.target,
     points: buckets.map((b) => {
-      const a = avg(inBucket(b).map((d) => g.byDay.get(d) ?? 0));
-      return { label: label(b), value: a === null ? 0 : Math.round(a * 100) / 100 };
+      const a = avg(inBucket(b).filter((d) => d >= g.start).map((d) => (g.met.has(d) ? 100 : 0)));
+      return { label: label(b), value: a === null ? 0 : Math.round(a) };
     }),
   }));
 

@@ -1,159 +1,158 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { deleteGoal, deleteWeight, logGoal, logWeight, saveGoal } from "@/app/actions";
-import { ActionForm, Bar, Field, Sheet, SubmitRow, callAction } from "@/components/ui";
+import { ActionForm, Field, Sheet, SubmitRow, callAction, isTemp, listOp, runOptimistic, tempId } from "@/components/ui";
 import { fmtDay, num } from "@/lib/format";
 
-type Goal = { id: string; name: string; target: number; unit: string; value: number; streakBefore: number };
+type Goal = { id: string; name: string; done: boolean; streakBefore: number };
 
-const IDEAS = [
-  { name: "Work", target: 5, unit: "hours" },
-  { name: "Read", target: 10, unit: "pages" },
-  { name: "Sleep", target: 8, unit: "hours" },
-  { name: "Water", target: 8, unit: "glasses" },
-  { name: "Workout", target: 30, unit: "min" },
-  { name: "Meditate", target: 1, unit: "" },
-];
-
-const isHabit = (g: { target: number; unit: string }) => g.target === 1 && !g.unit;
+const IDEAS = ["Work 5 hours", "Read 10 pages", "Sleep 8 hours", "Drink 8 glasses of water", "Workout 30 min", "Meditate"];
 
 export function GoalList({ goals, date, showStreak }: { goals: Goal[]; date: string; showStreak: boolean }) {
+  const [list, change] = useOptimistic(goals, listOp<Goal>);
   const [editing, setEditing] = useState<Goal | "new" | null>(null);
+  const doneCount = list.filter((g) => g.done).length;
+
   return (
     <>
-      {goals.length === 0 ? (
+      {list.length === 0 ? (
         <div className="card text-center">
           <p className="text-[16px]">Add the things you want to do every day.</p>
-          <p className="mt-1 text-[14px] text-muted">Work 5 hours, read 10 pages, drink 8 glasses of water…</p>
+          <p className="mt-1 text-[14px] text-muted">Then just tick them off.</p>
         </div>
       ) : (
-        <ul className="grid gap-3">
-          {goals.map((g) => (
-            <GoalCard key={g.id + date} g={g} date={date} showStreak={showStreak} onEdit={() => setEditing(g)} />
-          ))}
-        </ul>
+        <>
+          <p className="mb-2 text-[14px] font-medium text-muted">
+            {doneCount} of {list.length} done
+          </p>
+          <ul className="card divide-y divide-line p-0">
+            {list.map((g) => (
+              <GoalRow key={g.id + date} g={g} date={date} showStreak={showStreak} onEdit={() => setEditing(g)} />
+            ))}
+          </ul>
+        </>
       )}
       <button className="btn btn-soft mt-3 w-full" onClick={() => setEditing("new")}>
         + Add a goal
       </button>
-      <GoalSheet goal={editing} onClose={() => setEditing(null)} />
+      <GoalSheet
+        goal={editing}
+        onClose={() => setEditing(null)}
+        onSave={(fd) => {
+          const id = String(fd.get("id") || tempId());
+          const old = list.find((g) => g.id === id);
+          change({ type: "upsert", item: { id, name: String(fd.get("name")).trim(), done: old?.done ?? false, streakBefore: old?.streakBefore ?? 0 } });
+        }}
+        onDelete={(id) => runOptimistic(() => change({ type: "delete", id }), () => deleteGoal(id))}
+      />
     </>
   );
 }
 
-function GoalCard({ g, date, showStreak, onEdit }: { g: Goal; date: string; showStreak: boolean; onEdit: () => void }) {
-  const [value, setValue] = useState(g.value);
-  const [draft, setDraft] = useState(String(g.value));
+function GoalRow({ g, date, showStreak, onEdit }: { g: Goal; date: string; showStreak: boolean; onEdit: () => void }) {
+  const [done, setDone] = useState(g.done);
   const [, start] = useTransition();
-  useEffect(() => setDraft(String(value)), [value]);
+  const saving = isTemp(g.id);
 
-  const set = (v: number) => {
-    v = Math.min(100000, Math.max(0, Math.round(v * 100) / 100));
-    if (v === value) return;
-    const prev = value;
-    setValue(v);
+  const toggle = () => {
+    const next = !done;
+    setDone(next);
     start(async () => {
-      if (!(await callAction(() => logGoal(g.id, date, v)))) setValue(prev);
+      if (!(await callAction(() => logGoal(g.id, date, next)))) setDone(!next);
     });
   };
 
-  const done = value >= g.target;
   const streak = g.streakBefore + (done ? 1 : 0);
-  const step = g.target >= 20 ? 5 : 1;
 
   return (
-    <li className="card">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-[18px] font-semibold">{g.name}</h3>
-          <p className="tabular text-[14px] text-muted">
-            {isHabit(g) ? (done ? "Done" : "Not yet") : `${num(value)} / ${num(g.target)} ${g.unit}`}
-            {showStreak && streak > 0 && <span className="ml-2 font-semibold text-honey">🔥 {streak} day{streak > 1 ? "s" : ""}</span>}
-          </p>
-        </div>
-        <button onClick={onEdit} className="-mt-1 -mr-2 grid size-11 shrink-0 place-items-center rounded-full text-muted" aria-label={`Edit ${g.name}`}>
+    <li className="flex items-center gap-1 pr-1">
+      <button
+        onClick={toggle}
+        disabled={saving}
+        className="flex min-h-16 min-w-0 flex-1 items-center gap-3 py-2 pl-4 text-left"
+        role="checkbox"
+        aria-checked={done}
+        aria-label={g.name}
+      >
+        <span className={`grid size-8 shrink-0 place-items-center rounded-[10px] border-2 transition-colors ${done ? "border-sage bg-sage text-white" : "border-line bg-white"}`}>
+          {done && (
+            <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+          )}
+        </span>
+        <span className="min-w-0">
+          <span className={`block truncate text-[17px] font-medium ${done ? "text-muted line-through decoration-1" : ""}`}>{g.name}</span>
+          {saving ? (
+            <span className="block text-[13px] text-muted">Saving…</span>
+          ) : (
+            showStreak && streak > 0 && <span className="block text-[13px] font-semibold text-honey">🔥 {streak} day streak</span>
+          )}
+        </span>
+      </button>
+      {!saving && (
+        <button onClick={onEdit} className="grid size-11 shrink-0 place-items-center rounded-full text-muted" aria-label={`Edit ${g.name}`}>
           <svg viewBox="0 0 24 24" className="size-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden>
             <path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4" />
           </svg>
         </button>
-      </div>
-
-      {isHabit(g) ? (
-        <button onClick={() => set(done ? 0 : 1)} className={`btn mt-3 w-full ${done ? "bg-sage text-white" : "btn-ghost"}`} aria-pressed={done}>
-          {done ? "✓ Done" : "Mark done"}
-        </button>
-      ) : (
-        <>
-          <div className="mt-3">
-            <Bar pct={value / g.target} tone={done ? "sage" : "clay"} />
-          </div>
-          <div className="mt-3 grid grid-cols-[56px_1fr_56px] items-center gap-2">
-            <button className="btn btn-ghost px-0 text-2xl" onClick={() => set(value - step)} aria-label={`Less ${g.name}`} disabled={value <= 0}>
-              −
-            </button>
-            <input
-              className="input tabular text-center text-[18px] font-semibold"
-              inputMode="decimal"
-              aria-label={`${g.name} amount`}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              onFocus={(e) => e.target.select()}
-              onBlur={() => {
-                const v = Number(draft.replace(",", "."));
-                Number.isFinite(v) ? set(v) : setDraft(String(value));
-              }}
-              onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-            />
-            <button className="btn btn-primary px-0 text-2xl" onClick={() => set(value + step)} aria-label={`More ${g.name}`}>
-              +
-            </button>
-          </div>
-        </>
       )}
     </li>
   );
 }
 
-function GoalSheet({ goal, onClose }: { goal: Goal | "new" | null; onClose: () => void }) {
+function GoalSheet({
+  goal,
+  onClose,
+  onSave,
+  onDelete,
+}: {
+  goal: Goal | "new" | null;
+  onClose: () => void;
+  onSave: (fd: FormData) => void;
+  onDelete: (id: string) => void;
+}) {
   const g = goal && goal !== "new" ? goal : null;
-  const [prefill, setPrefill] = useState<{ name: string; target: number; unit: string } | null>(null);
-  const v = g ?? prefill;
+  const [name, setName] = useState<string | null>(null);
   const close = () => {
     onClose();
-    setPrefill(null);
+    setName(null);
   };
   return (
     <Sheet open={!!goal} onClose={close} title={g ? "Edit goal" : "New daily goal"}>
-      {!g && (
-        <div className="mb-4 flex flex-wrap gap-2">
-          {IDEAS.map((i) => (
-            <button key={i.name} type="button" className="rounded-full border border-line px-3 py-2 text-[14px] font-medium" onClick={() => setPrefill(i)}>
-              {i.name} {i.unit ? `${i.target} ${i.unit}` : "(yes/no)"}
-            </button>
-          ))}
-        </div>
-      )}
-      <ActionForm key={JSON.stringify(v)} action={saveGoal} onDone={close}>
+      <ActionForm action={saveGoal} onDone={close} optimistic={onSave}>
         {g && <input type="hidden" name="id" value={g.id} />}
         <Field label="Goal">
-          <input className="input" name="name" defaultValue={v?.name} placeholder="Read" maxLength={40} required />
+          <input
+            className="input"
+            name="name"
+            value={name ?? g?.name ?? ""}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Read 10 pages"
+            maxLength={40}
+            required
+            autoFocus={!g}
+          />
         </Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Daily target">
-            <input className="input" name="target" inputMode="decimal" defaultValue={v?.target ?? ""} placeholder="10" required />
-          </Field>
-          <Field label="Unit">
-            <input className="input" name="unit" defaultValue={v?.unit} placeholder="pages" maxLength={15} />
-          </Field>
-        </div>
-        <p className="-mt-2 text-[13px] text-muted">For a yes/no habit, use target 1 and leave the unit empty.</p>
+        {!g && (
+          <div className="flex flex-wrap gap-2">
+            {IDEAS.map((i) => (
+              <button key={i} type="button" className="min-h-10 rounded-full border border-line px-3 text-[14px] font-medium" onClick={() => setName(i)}>
+                {i}
+              </button>
+            ))}
+          </div>
+        )}
         <SubmitRow
           label={g ? "Save" : "Add goal"}
           onDelete={
             g
-              ? async () => {
-                  if (confirm(`Delete "${g.name}" and all its history?`) && (await callAction(() => deleteGoal(g.id)))) close();
+              ? () => {
+                  if (confirm(`Delete "${g.name}" and all its history?`)) {
+                    close();
+                    onDelete(g.id);
+                  }
                 }
               : undefined
           }
@@ -166,8 +165,10 @@ function GoalSheet({ goal, onClose }: { goal: Goal | "new" | null; onClose: () =
 type Weight = { id: string; date: string; kg: number };
 
 export function WeightCard({ today, weights }: { today: string; weights: Weight[] }) {
+  const [list, change] = useOptimistic(weights, listOp<Weight>);
   const [open, setOpen] = useState(false);
-  const last = weights[0];
+  const sorted = [...list].sort((a, b) => b.date.localeCompare(a.date));
+  const last = sorted[0];
   return (
     <div className="card flex items-center justify-between gap-3">
       <div>
@@ -181,10 +182,18 @@ export function WeightCard({ today, weights }: { today: string; weights: Weight[
         Log weight
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Log weight">
-        <ActionForm action={logWeight} onDone={() => setOpen(false)}>
+        <ActionForm
+          action={logWeight}
+          onDone={() => setOpen(false)}
+          optimistic={(fd) => {
+            const date = String(fd.get("date"));
+            const kg = Number(fd.get("kg"));
+            change({ type: "upsert", item: { id: list.find((w) => w.date === date)?.id ?? tempId(), date, kg } });
+          }}
+        >
           <div className="grid grid-cols-2 gap-3">
             <Field label="Weight (kg)">
-              <input className="input" name="kg" inputMode="decimal" defaultValue={last?.kg ?? ""} required />
+              <input className="input" name="kg" type="number" inputMode="decimal" step="0.1" min="20" max="400" defaultValue={last?.kg ?? ""} required />
             </Field>
             <Field label="Date">
               <input className="input" name="date" type="date" defaultValue={today} max={today} required />
@@ -192,16 +201,22 @@ export function WeightCard({ today, weights }: { today: string; weights: Weight[
           </div>
           <SubmitRow label="Save" />
         </ActionForm>
-        {weights.length > 0 && (
+        {sorted.length > 0 && (
           <ul className="mt-5 divide-y divide-line border-t border-line">
-            {weights.map((w) => (
+            {sorted.map((w) => (
               <li key={w.id} className="flex items-center justify-between py-1">
                 <span className="text-[15px] text-muted">{fmtDay(w.date)}</span>
                 <span className="flex items-center gap-1">
                   <span className="tabular font-semibold">{num(w.kg)} kg</span>
-                  <button className="grid size-11 place-items-center text-muted" aria-label={`Delete ${fmtDay(w.date)} weight`} onClick={() => confirm("Delete this entry?") && callAction(() => deleteWeight(w.id))}>
-                    ×
-                  </button>
+                  {!isTemp(w.id) && (
+                    <button
+                      className="grid size-11 place-items-center text-muted"
+                      aria-label={`Delete ${fmtDay(w.date)} weight`}
+                      onClick={() => confirm("Delete this entry?") && runOptimistic(() => change({ type: "delete", id: w.id }), () => deleteWeight(w.id))}
+                    >
+                      ×
+                    </button>
+                  )}
                 </span>
               </li>
             ))}

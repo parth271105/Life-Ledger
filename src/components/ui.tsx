@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { startTransition, useEffect, useRef, useState, useTransition } from "react";
 import { OFFLINE } from "@/lib/format";
 
 type Result = { error?: string; notice?: string };
@@ -42,13 +42,32 @@ export async function callAction(fn: () => Promise<Result>): Promise<boolean> {
   try {
     const r = await fn();
     if (r.error) toast(r.error, "error");
-    else if (r.notice) toast(r.notice, r.notice.startsWith("Over") || r.notice.startsWith("Heads") ? "warn" : "ok");
+    else if (r.notice) toast(r.notice, toneOf(r.notice));
     return !r.error;
   } catch {
     toast(OFFLINE, "error");
     return false;
   }
 }
+
+/** Applies an optimistic change now, then saves; React drops the optimistic change once the real data arrives. */
+export function runOptimistic(apply: () => void, fn: () => Promise<Result>) {
+  startTransition(async () => {
+    apply();
+    await callAction(fn);
+  });
+}
+
+type Op<T> = { type: "upsert"; item: T } | { type: "delete"; id: string };
+
+/** Reducer for useOptimistic over a list of {id} items. */
+export function listOp<T extends { id: string }>(list: T[], op: Op<T>): T[] {
+  if (op.type === "delete") return list.filter((x) => x.id !== op.id);
+  return list.some((x) => x.id === op.item.id) ? list.map((x) => (x.id === op.item.id ? { ...x, ...op.item } : x)) : [...list, op.item];
+}
+
+export const tempId = () => "tmp-" + Math.random().toString(36).slice(2);
+export const isTemp = (id: string) => id.startsWith("tmp-");
 
 /* ---------- Sheet (native <dialog>) ---------- */
 
@@ -87,14 +106,19 @@ export function Sheet({
 
 /* ---------- Form that posts to a server action and shows errors inline ---------- */
 
+const toneOf = (notice: string) => (notice.startsWith("Over") || notice.startsWith("Heads") ? "warn" : "ok");
+
 export function ActionForm({
   action,
   onDone,
+  optimistic,
   children,
   className = "grid gap-4",
 }: {
   action: (fd: FormData) => Promise<Result>;
   onDone?: () => void;
+  /** Show the change in the list right away; the sheet closes instantly and saving happens in the background. */
+  optimistic?: (fd: FormData) => void;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -106,12 +130,21 @@ export function ActionForm({
       onSubmit={(e) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
+        if (optimistic) {
+          onDone?.();
+          // Global startTransition: this form unmounts when the sheet closes, the list keeps the optimistic item.
+          startTransition(async () => {
+            optimistic(fd);
+            await callAction(() => action(fd));
+          });
+          return;
+        }
         start(async () => {
           try {
             const r = await action(fd);
             if (r.error) return setErr(r.error);
             setErr("");
-            if (r.notice) toast(r.notice, r.notice.startsWith("Over") || r.notice.startsWith("Heads") ? "warn" : "ok");
+            if (r.notice) toast(r.notice, toneOf(r.notice));
             onDone?.();
           } catch {
             setErr(OFFLINE);

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { nextMonth, toDate, toYmd, todayIn } from "@/lib/dates";
-import { money } from "@/lib/format";
 import { PageHead } from "@/components/ui";
 import { MoneyView } from "./money-view";
 
@@ -32,10 +31,6 @@ export default async function Money({ searchParams }: { searchParams: Promise<{ 
 
   const total = (t: "IN" | "OUT") => Number(sums.find((s) => s.type === t)?._sum.amount ?? 0);
   const rows = txs.map((t) => ({ id: t.id, amount: Number(t.amount), type: t.type, category: t.category, date: toYmd(t.date), note: t.note }));
-  const spentBy = new Map<string, number>();
-  for (const t of rows) if (t.type === "OUT") spentBy.set(t.category, (spentBy.get(t.category) ?? 0) + t.amount);
-  const monthIn = rows.filter((t) => t.type === "IN").reduce((s, t) => s + t.amount, 0);
-  const monthOut = rows.filter((t) => t.type === "OUT").reduce((s, t) => s + t.amount, 0);
 
   const monthName = (ym: string) => toDate(ym + "-01").toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
   const balance = total("IN") - total("OUT");
@@ -43,11 +38,14 @@ export default async function Money({ searchParams }: { searchParams: Promise<{ 
   return (
     <>
       <PageHead title="Money" />
-      <section className="card">
-        <p className="text-[14px] font-medium text-muted">Balance</p>
-        <p className={`tabular text-[34px] leading-tight font-semibold ${balance < 0 ? "text-berry" : ""}`}>{money(balance)}</p>
-      </section>
-
+      <MoneyView
+        today={today}
+        month={month}
+        balance={balance}
+        txs={rows}
+        budgets={budgets.map((b) => ({ id: b.id, category: b.category, limit: Number(b.monthlyLimit) }))}
+        categories={[...new Set([...cats.map((c) => c.category), ...DEFAULT_CATS])]}
+        nav={
       <div className="mt-5 flex items-center justify-between">
         <Link href={`/money?m=${prevMonth(month)}`} className="grid size-11 place-items-center rounded-full text-xl text-muted" aria-label="Previous month">
           ‹
@@ -61,14 +59,7 @@ export default async function Money({ searchParams }: { searchParams: Promise<{ 
           <span className="size-11" />
         )}
       </div>
-
-      <MoneyView
-        today={today}
-        monthIn={monthIn}
-        monthOut={monthOut}
-        txs={rows}
-        budgets={budgets.map((b) => ({ id: b.id, category: b.category, limit: Number(b.monthlyLimit), spent: spentBy.get(b.category) ?? 0 }))}
-        categories={[...new Set([...cats.map((c) => c.category), ...DEFAULT_CATS])]}
+        }
       />
     </>
   );

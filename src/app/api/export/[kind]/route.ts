@@ -17,7 +17,7 @@ async function rows(kind: string, userId: string): Promise<Cell[][] | null> {
   switch (kind) {
     case "goals": {
       const goals = await db.goal.findMany({ where: { userId }, include: { logs: { orderBy: { date: "asc" } } }, orderBy: { createdAt: "asc" } });
-      return [["Date", "Goal", "Value", "Target", "Unit", "Met"], ...goals.flatMap((g) => g.logs.map((l) => [toYmd(l.date), g.name, l.value, g.target, g.unit, l.value >= g.target ? "yes" : "no"]))];
+      return [["Date", "Goal", "Done"], ...goals.flatMap((g) => g.logs.map((l) => [toYmd(l.date), g.name, l.value >= g.target ? "yes" : "no"]))];
     }
     case "weight": {
       const w = await db.weightLog.findMany({ where: { userId }, orderBy: { date: "asc" } });

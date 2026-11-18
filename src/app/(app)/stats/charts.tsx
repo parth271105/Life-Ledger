@@ -8,7 +8,6 @@ import {
   Legend,
   Line,
   LineChart,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -31,7 +30,7 @@ type Props = {
   weekly: boolean;
   completion: { label: string; pct: number | null }[];
   streaks: { name: string; current: number; best: number; rate: number | null }[];
-  goalSeries: { id: string; name: string; unit: string; target: number; points: { label: string; value: number }[] }[];
+  goalSeries: { id: string; name: string; points: { label: string; value: number }[] }[];
   weights: { label: string; kg: number }[];
   taskBars: { label: string; done: number; missed: number }[];
   cash: { label: string; income: number; expense: number }[];
@@ -111,7 +110,7 @@ export function Charts(p: Props) {
       )}
 
       {goal && (
-        <Card title="Goal progress" sub={p.weekly ? "Average per day, each week" : "Logged each day"}>
+        <Card title="Goal progress" sub={p.weekly ? "Share of days done, each week" : "Days you ticked it off"}>
           <select className="input mb-3" value={goal.id} onChange={(e) => setGoalId(e.target.value)} aria-label="Goal">
             {p.goalSeries.map((g) => (
               <option key={g.id} value={g.id}>
@@ -121,9 +120,8 @@ export function Charts(p: Props) {
           </select>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={goal.points} margin={{ top: 16, right: 8, left: -8, bottom: 0 }}>
-              {axes()}
-              <Tooltip {...TIP} formatter={(v) => [`${num(Number(v))} ${goal.unit}`, goal.name]} />
-              <ReferenceLine y={goal.target} stroke="#2b2420" strokeDasharray="4 4" label={{ value: "target", position: "insideTopRight", fontSize: 12, fill: "#7a6e64" }} />
+              {axes("%", [0, 100])}
+              <Tooltip {...TIP} formatter={(v) => [p.weekly ? `${v}% of days` : Number(v) ? "Done" : "Not done", goal.name]} />
               <RBar isAnimationActive={false} dataKey="value" fill={CLAY} radius={[4, 4, 0, 0]} maxBarSize={28} />
             </BarChart>
           </ResponsiveContainer>
